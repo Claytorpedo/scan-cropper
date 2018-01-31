@@ -1,11 +1,10 @@
 import numpy as np
-import cv2, os, argparse, errno, math, multiprocessing
+import cv2, os, argparse, datetime, errno, math, multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 
 DEG_TO_RAD = math.pi / 180
-EXTS = [".jpg", ".jpeg", ".png", ".bmp" ] # Image extentions to look for.
+EXTS = [".jpg", ".jpeg", ".png", ".bmp" ] # Image extensions to look for.
 MAX = 255 # Thresholded max value (white).
-
 
 parser = argparse.ArgumentParser(description="Scanned image cropper." +
 			"\nProcess scanned images to find photos inside them." +
@@ -24,7 +23,7 @@ parser.add_argument('--num-threads', '-n', dest='threads', type=int, default=0,
 					help="Number of threads to use." +
 					"\n0 = system number of cores.")
 					
-parser.add_argument('--pic-size-diff', '-s', type=float, dest='scale', default=0.90,
+parser.add_argument('--pic-size-diff', '-s', type=float, dest='scale', default=0.80,
 					help="The approximate size difference between scanned images, as a percent." +
 					"\nSet lower if images are of varying sizes." +
 					"\nRange: [0.0,1.0]" )
@@ -41,6 +40,8 @@ parser.add_argument('--blur', '-b', type=int, dest='blur', default=9,
 					help="How much blur to apply when processing." +
 					"\nDifferent values may effect how well scans are found and cropped." +
 					"\nMust be odd number greater than 1.")
+parser.add_argument('--append-datetime', '-a', dest='useDatetime', action='store_true',
+					help="Append the current date to the start of output image files.")
 args = parser.parse_args()
 
 THREADS = args.threads
@@ -50,6 +51,7 @@ NUM_SCANS = args.num_scans
 IM_SCALE = args.scale
 IMDIR = args.dir
 OUTDIR = args.odir
+SHOULD_APPEND_DATETIME = args.useDatetime
 
 if THREADS is 0 :
 	THREADS = multiprocessing.cpu_count()
@@ -64,6 +66,9 @@ try:
 except OSError as e:
 	if e.errno != errno.EEXIST:
 		raise
+
+def getDatetime():
+	return datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 def openImage(dir, file):
 	path = os.path.join(dir, file)
@@ -91,10 +96,12 @@ def writeScans(dir, fileName, scans):
 		global ERRORS
 		ERRORS += 1
 		return
+	name, ext = os.path.splitext(fileName)
+	if SHOULD_APPEND_DATETIME:
+		name = "{}_{}".format(getDatetime(), name)
 	num = 0
 	for scan in scans:
-		name, ext = os.path.splitext(fileName)
-		f = "{}_{}{}".format(name, "_{}".format(num), ext)
+		f = "{}_{}{}".format(name, num, ext)
 		writeImage(dir, f, scan)
 		num += 1
 
@@ -107,7 +114,7 @@ def getAveROISize(candidates):
 	return av / len(candidates)
 	
 # Find regions of interest in the form [rect, box-contour].
-# Attempst to find however many scans we're looking for in the image.
+# Attempts to find however many scans we're looking for in the image.
 def getROI(contours):
 	roi = []
 	for contour in contours:
