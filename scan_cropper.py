@@ -181,14 +181,15 @@ def clipScans(img, candidates):
 def findScans(img):
 	blur = cv2.medianBlur(img, BLUR)
 	grey = cv2.cvtColor(blur, cv2.COLOR_BGR2GRAY)
-	ret, thr = cv2.threshold(grey, THRESH, MAX, cv2.THRESH_BINARY_INV)
-	i, contours, h = cv2.findContours(thr, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+	_, thr = cv2.threshold(grey, THRESH, MAX, cv2.THRESH_BINARY_INV)
+	contours, _ = cv2.findContours(thr, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 	roi = getROI(contours)
 	scans = clipScans(img, roi)
 	return scans
 
 def processFile(file):
 	global IMDIR, OUTDIR, IMAGES, SCANS
+	print(file)
 	img = openImage(IMDIR, file)
 	scans = findScans(img)
 	writeScans(OUTDIR, file, scans)
@@ -197,12 +198,10 @@ def processFile(file):
 	
 #--------------------------------------------------------------------
 
-executor = ThreadPoolExecutor(THREADS)
-	
-for file in [f for f in os.listdir(IMDIR) if f.endswith(tuple(EXTS))]:
-	executor.submit(processFile, file)
+with ThreadPoolExecutor(max_workers=THREADS) as executor:
+	for file in [f for f in os.listdir(IMDIR) if f.endswith(tuple(EXTS))]:
+		executor.submit(processFile, file)
 
-executor.shutdown() # Join all threads.
 print("\n-----------------------------------------------------")
 print("{} pictures found in {} scan files.".format(SCANS, IMAGES))
 print("Program completed with {} errors and warnings.".format(ERRORS))
